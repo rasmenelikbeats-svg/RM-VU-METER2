@@ -1,0 +1,626 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>RM VU Meter – Fase 2</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #14120f;
+    --panel: #1d1a16;
+    --line: #34302a;
+    --fg: #ece6da;
+    --dim: #9a9285;
+    --ok: #6fcf7f;
+    --warn: #e8b64a;
+    --bad: #ee6a5a;
+    --info: #6aa8ee;
+    --btn: #2a2620;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--fg); }
+  body {
+    font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    padding: 14px max(14px, env(safe-area-inset-left)) 40px max(14px, env(safe-area-inset-right));
+    max-width: 640px; margin: 0 auto;
+  }
+  h1 { font-size: 18px; margin: 0; letter-spacing: .04em; }
+  .brand { color: var(--dim); font-size: 12px; letter-spacing: .12em; text-transform: uppercase; }
+  .tag { display: inline-block; margin-top: 6px; padding: 2px 8px; border: 1px solid var(--warn); color: var(--warn); border-radius: 4px; font-size: 12px; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px; margin-top: 12px; }
+  .status { font-size: 20px; font-weight: 700; padding: 14px 12px; border-radius: 8px; border: 2px solid var(--line); background: var(--panel); margin-top: 12px; }
+  .status small { display: block; font-size: 13px; font-weight: 400; color: var(--dim); margin-top: 4px; }
+  .status.ok { border-color: var(--ok); color: var(--ok); }
+  .status.warn { border-color: var(--warn); color: var(--warn); }
+  .status.bad { border-color: var(--bad); color: var(--bad); }
+  .status.info { border-color: var(--info); color: var(--info); }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+  button { flex: 1 1 140px; min-height: 56px; font: 700 15px system-ui, sans-serif; letter-spacing: .04em; color: var(--fg); background: var(--btn); border: 1px solid #4a443b; border-radius: 8px; padding: 10px; }
+  button:active { background: #3a352d; }
+  button:focus-visible, select:focus-visible { outline: 3px solid var(--info); outline-offset: 2px; }
+  button.go { border-color: var(--ok); color: var(--ok); }
+  button.stop { border-color: var(--bad); color: var(--bad); }
+  button:disabled { opacity: .4; }
+  label { display: block; color: var(--dim); font-size: 12px; text-transform: uppercase; letter-spacing: .08em; margin: 12px 0 4px; }
+  select { width: 100%; min-height: 48px; font: 15px system-ui, sans-serif; background: var(--btn); color: var(--fg); border: 1px solid #4a443b; border-radius: 8px; padding: 8px; }
+  dl { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; }
+  dt { color: var(--dim); }
+  dd { margin: 0; min-width: 0; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+  .ch { margin-top: 10px; }
+  .ch .top { display: flex; justify-content: space-between; gap: 8px; font-variant-numeric: tabular-nums; }
+  .bar { position: relative; height: 18px; background: #0d0c0a; border: 1px solid var(--line); border-radius: 4px; margin-top: 4px; overflow: hidden; }
+  .bar i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--ok); width: 0; }
+  .bar b { position: absolute; top: 0; bottom: 0; width: 3px; background: var(--fg); left: 0; }
+  .scale { display: flex; justify-content: space-between; color: var(--dim); font-size: 11px; margin-top: 2px; }
+  pre, textarea { width: 100%; background: #0d0c0a; color: var(--fg); border: 1px solid var(--line); border-radius: 6px; font: 12px/1.4 ui-monospace, Menlo, Consolas, monospace; padding: 8px; margin: 0; }
+  pre { max-height: 220px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+  textarea { height: 140px; }
+  ol { margin: 6px 0 0; padding-left: 20px; }
+  li { margin: 4px 0; }
+  .yes { color: var(--ok); } .no { color: var(--bad); }
+  .vuhead { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .vunum { font-size: 40px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: .02em; }
+  .vubar { position: relative; height: 36px; margin-top: 8px; border: 1px solid var(--line); border-radius: 4px; overflow: hidden;
+           background: linear-gradient(90deg, #4f8f5a 0, #4f8f5a 86.9%, #c0463a 87%, #c0463a 100%); }
+  .vucover { position: absolute; top: 0; bottom: 0; right: 0; width: 100%; background: #0d0c0a; }
+  .vuticks { position: relative; height: 16px; margin-top: 2px; }
+  .vuticks span { position: absolute; transform: translateX(-50%); font-size: 10px; color: var(--dim); font-variant-numeric: tabular-nums; }
+  .vuticks span.red { color: var(--bad); }
+  .vuinfo { color: var(--dim); font-size: 12px; margin-top: 6px; font-variant-numeric: tabular-nums; }
+  .ctl { display: grid; grid-template-columns: 56px 1fr 56px; gap: 8px; align-items: center; margin-top: 6px; }
+  .ctl button { flex: none; min-width: 56px; font-size: 24px; padding: 0; }
+  .ctl .val { text-align: center; font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .ctl .val small { display: block; font-size: 11px; font-weight: 400; color: var(--dim); }
+</style>
+</head>
+<body>
+  <div class="brand">RM Audio · Ras Menelik</div>
+  <h1>RM VU METER</h1>
+  <span class="tag">FASE 2 · BUILD 2 · PROTOTYPE · engine getest met testsignalen · nog niet gemeten met de SP</span>
+
+  <div id="status" class="status info">STANDBY<small>Nog niets gedaan.</small></div>
+
+  <div class="row">
+    <button id="btnFind" type="button">1 · APPARATEN ZOEKEN</button>
+  </div>
+
+  <label for="dev">Audio-input</label>
+  <select id="dev"><option value="">— zoek eerst apparaten —</option></select>
+
+  <div class="row">
+    <button id="btnStart" class="go" type="button">2 · START METEN</button>
+    <button id="btnStop" class="stop" type="button" disabled>STOP</button>
+  </div>
+
+  <div class="panel">
+    <div class="vuhead"><strong>VU · mono-mix (L+R)/2</strong><span id="vuNum" class="vunum">–</span></div>
+    <div class="vubar" id="vuBar"><div class="vucover" id="vuCover"></div></div>
+    <div class="vuticks" id="vuTicks"></div>
+    <div class="vuinfo" id="vuInfo">Nog niet aan het meten.</div>
+
+    <label style="margin-top:14px">Kalibratie (0 VU =)</label>
+    <div class="ctl">
+      <button id="calDn" type="button" aria-label="Kalibratie 1 dB lager">−</button>
+      <div class="val" id="calTxt">–<small>sinus-RMS in dBFS die 0 VU toont · bereik −24 tot −6</small></div>
+      <button id="calUp" type="button" aria-label="Kalibratie 1 dB hoger">+</button>
+    </div>
+
+    <label>Meter-gain</label>
+    <div class="ctl">
+      <button id="gDn" type="button" aria-label="Meter-gain 1 dB lager">−</button>
+      <div class="val" id="gTxt">–<small>alleen de weergave, niet het geluid · bereik −24 tot +24 dB</small></div>
+      <button id="gUp" type="button" aria-label="Meter-gain 1 dB hoger">+</button>
+    </div>
+    <div class="row"><button id="btnReset" type="button" style="min-height:44px">TERUG NAAR STANDAARD (−18 dBFS, 0 dB)</button></div>
+  </div>
+
+  <div class="panel">
+    <dl>
+      <dt>Apparaat</dt><dd id="oDev">–</dd>
+      <dt>Verbinding</dt><dd id="oConn">niet verbonden</dd>
+      <dt>Sample rate</dt><dd id="oRate">–</dd>
+      <dt>Kanalen</dt><dd id="oCh">–</dd>
+      <dt>Signaal</dt><dd id="oSig">–</dd>
+      <dt>Verwerking</dt><dd id="oProc">–</dd>
+      <dt>Laatste fout</dt><dd id="oErr">geen</dd>
+    </dl>
+  </div>
+
+  <div class="panel">
+    <strong>Diagnose per kanaal (dBFS)</strong>
+    <div class="ch">
+      <div class="top"><span>L</span><span id="lvL">−∞ dBFS RMS · piek −∞</span></div>
+      <div class="bar"><i id="bL"></i><b id="pL"></b></div>
+    </div>
+    <div class="ch">
+      <div class="top"><span>R</span><span id="lvR">−∞ dBFS RMS · piek −∞</span></div>
+      <div class="bar"><i id="bR"></i><b id="pR"></b></div>
+    </div>
+    <div class="scale"><span>−60</span><span>−48</span><span>−36</span><span>−24</span><span>−12</span><span>0 dBFS</span></div>
+    <p style="color:var(--dim);font-size:12px;margin:8px 0 0">
+      Meetconventie: dBFS RMS = 20·log10(√gemiddelde(x²)), gemiddeld over 0,3 s. Een sinus op volle schaal is −3,0 dBFS RMS. Piek = hoogste samplewaarde, 2 s vastgehouden. Dit zijn ruwe waarden per kanaal ter controle van de input, geen VU-meting.
+    </p>
+  </div>
+
+  <div class="panel">
+    <strong>Zo test je</strong>
+    <ol>
+      <li>Tik op APPARATEN ZOEKEN en geef toestemming voor de microfoon (dat is hoe Chrome audio-ingangen heet, ook voor USB).</li>
+      <li>Kies de SP-404MKII in de lijst. Staat hij er niet bij, kies dan op elke input en kijk wat er gebeurt.</li>
+      <li>Tik op START METEN en speel een pad op de SP. De VU-waarde en de balk moeten bewegen.</li>
+      <li>Zet de SP stil en klap of praat bij de telefoon. De meter mag dan niet bewegen. Beweegt hij wel, dan meet je de interne microfoon.</li>
+      <li>Tik op KOPIEER TESTRAPPORT en plak het in de chat.</li>
+    </ol>
+  </div>
+
+  <div class="panel">
+    <strong>Omgeving</strong>
+    <dl style="margin-top:8px">
+      <dt>Adres</dt><dd id="eProto">–</dd>
+      <dt>Beveiligde context</dt><dd id="eSecure">–</dd>
+      <dt>Audio-apparaten (mediaDevices)</dt><dd id="eMd">–</dd>
+      <dt>AudioWorklet</dt><dd id="eWk">–</dd>
+    </dl>
+  </div>
+
+  <div class="panel">
+    <strong>Logboek</strong>
+    <pre id="log" style="margin-top:8px"></pre>
+  </div>
+
+  <div class="row">
+    <button id="btnCopy" type="button">KOPIEER TESTRAPPORT</button>
+  </div>
+  <textarea id="report" readonly aria-label="Testrapport" style="margin-top:12px" hidden></textarea>
+
+<script>
+(function () {
+  "use strict";
+  var $ = function (id) { return document.getElementById(id); };
+  var MINUS = "−";
+  var SIGNAL_THRESHOLD_DB = -60;
+
+  var S = {
+    ctx: null, stream: null, track: null, node: null, source: null, gain: null,
+    running: false, wake: null, startedAt: 0, lastMsg: 0, lastSignal: 0, everSignal: false,
+    ch: 0, pow: [0, 0], peakHold: [0, 0], peakAt: [0, 0], vuLin: 0, st: null, cal: -18, gainDb: 0,
+    trackSettings: null, trackLabel: "", chosenId: "", chosenLabel: "", devices: [],
+    permission: "onbekend", statusKind: "", statusText: ""
+  };
+
+  var logLines = [];
+  function log(msg) {
+    var t = new Date().toTimeString().slice(0, 8);
+    logLines.push(t + "  " + msg);
+    if (logLines.length > 60) logLines.shift();
+    $("log").textContent = logLines.join("\n");
+    $("log").scrollTop = $("log").scrollHeight;
+  }
+
+  function setStatus(kind, title, detail) {
+    var el = $("status");
+    el.className = "status " + kind;
+    el.textContent = "";
+    el.appendChild(document.createTextNode(title));
+    if (detail) { var s = document.createElement("small"); s.textContent = detail; el.appendChild(s); }
+    if (S.statusText !== title) log("STATUS: " + title + (detail ? " – " + detail : ""));
+    S.statusKind = kind; S.statusText = title;
+  }
+
+  function fail(msg, title) {
+    $("oErr").textContent = msg;
+    setStatus("bad", title || "TECHNISCHE FOUT", msg);
+  }
+
+  function db(x) { return x > 1e-9 ? 20 * Math.log10(x) : -Infinity; }
+  function fmt(d) { return isFinite(d) ? d.toFixed(1).replace("-", MINUS) : MINUS + "∞"; }
+
+  /* ---------- omgeving ---------- */
+  var hasMd = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+  var AC = window.AudioContext || window.webkitAudioContext;
+  var hasWorklet = !!(AC && window.AudioWorklet);
+
+  function yn(el, ok, yes, no) { el.textContent = ok ? yes : no; el.className = ok ? "yes" : "no"; }
+  $("eProto").textContent = location.protocol + "//" + (location.host || "(geen host)");
+  yn($("eSecure"), window.isSecureContext, "ja", "NEE");
+  yn($("eMd"), hasMd, "beschikbaar", "ONTBREEKT");
+  yn($("eWk"), hasWorklet, "beschikbaar", "ONTBREEKT");
+
+  window.addEventListener("error", function (e) {
+    fail("Scriptfout: " + (e.message || "onbekend") + (e.lineno ? " (regel " + e.lineno + ")" : ""));
+  });
+  window.addEventListener("unhandledrejection", function (e) {
+    var r = e.reason; fail("Onverwachte fout: " + (r && r.message ? r.message : String(r)));
+  });
+
+  if (!hasMd) {
+    fail("Deze pagina krijgt van de browser geen toegang tot audio-apparaten (navigator.mediaDevices ontbreekt). " +
+      "Dat gebeurt als de pagina niet via https wordt geopend. Adres nu: " + location.protocol + "//" + (location.host || "") +
+      ". Open de pagina via een https-adres.", "GEEN TOEGANG TOT AUDIO");
+  } else if (!hasWorklet) {
+    fail("Deze browser ondersteunt AudioWorklet niet. Gebruik een recente Chrome.", "BROWSER TE OUD");
+  } else {
+    setStatus("info", "STANDBY", "Tik op APPARATEN ZOEKEN.");
+  }
+
+  /* ---------- apparaten ---------- */
+  var SP_RE = /SP-?404|Roland/i;
+
+  async function refreshDevices() {
+    var list = await navigator.mediaDevices.enumerateDevices();
+    var ins = list.filter(function (d) { return d.kind === "audioinput"; });
+    S.devices = ins;
+    var sel = $("dev"), prev = sel.value;
+    sel.textContent = "";
+    var o0 = document.createElement("option");
+    o0.value = ""; o0.textContent = "— kies een input —";
+    sel.appendChild(o0);
+    var labelsHidden = ins.length > 0 && ins.every(function (d) { return !d.label; });
+    var spId = "";
+    ins.forEach(function (d, i) {
+      var o = document.createElement("option");
+      o.value = d.deviceId;
+      o.textContent = d.label || ("Input " + (i + 1) + " (naam pas zichtbaar na toestemming)");
+      if (SP_RE.test(d.label) && !spId) spId = d.deviceId;
+      sel.appendChild(o);
+    });
+    if (spId) sel.value = spId;
+    else if (prev && ins.some(function (d) { return d.deviceId === prev; })) sel.value = prev;
+    log("Gevonden audio-inputs: " + (ins.length ? ins.map(function (d) { return "[" + (d.label || "naamloos") + "]"; }).join(" ") : "geen"));
+    return { count: ins.length, labelsHidden: labelsHidden, spId: spId };
+  }
+
+  async function findDevices() {
+    if (!hasMd) return;
+    try {
+      try {
+        var pq = await navigator.permissions.query({ name: "microphone" });
+        S.permission = pq.state;
+        pq.onchange = function () { S.permission = pq.state; log("Microfoon-toestemming: " + pq.state); };
+        log("Microfoon-toestemming: " + pq.state);
+      } catch (e) { log("Toestemmingsstatus niet uitleesbaar in deze browser."); }
+
+      if (S.permission !== "granted") {
+        setStatus("warn", "TOESTEMMING VEREIST", "Chrome vraagt nu om toegang tot de microfoon. Kies Toestaan.");
+        var tmp = await navigator.mediaDevices.getUserMedia({ audio: true });
+        tmp.getTracks().forEach(function (t) { t.stop(); });
+        log("Toestemming gegeven. (De korte test-opname is direct gestopt en niet gemeten.)");
+      }
+      var r = await refreshDevices();
+      if (r.count === 0) {
+        setStatus("warn", "GEEN APPARAAT AANGESLOTEN", "De browser ziet geen audio-input. Controleer de USB-C-kabel en of de SP aan staat.");
+      } else if (r.spId) {
+        setStatus("info", "USB-APPARAAT GEDETECTEERD", "Een input met SP-404 of Roland in de naam is voorgeselecteerd. Tik op START METEN.");
+      } else {
+        setStatus("warn", "GEEN SP-404MKII HERKEND OP NAAM",
+          "Geen input met SP-404 of Roland in de naam. Kies zelf een input en controleer met de klaptest (stap 4).");
+      }
+    } catch (e) { handleGumError(e); }
+  }
+
+  function handleGumError(e) {
+    var n = e && e.name || "Error", m = e && e.message || "";
+    log("getUserMedia-fout: " + n + " " + m);
+    if (n === "NotAllowedError" || n === "SecurityError") {
+      fail("Toegang tot de microfoon is geweigerd of geblokkeerd. Chrome: ⋮ > Instellingen > Site-instellingen > Microfoon. " +
+        "Android: Instellingen > Apps > Chrome > Rechten > Microfoon > Toestaan.", "TOESTEMMING VEREIST");
+      setStatus("warn", "TOESTEMMING VEREIST", $("oErr").textContent);
+    } else if (n === "NotFoundError" || n === "OverconstrainedError") {
+      fail("De gekozen input bestaat niet meer. Tik op APPARATEN ZOEKEN en kies opnieuw. (" + n + ")", "GEEN APPARAAT AANGESLOTEN");
+      setStatus("warn", "GEEN APPARAAT AANGESLOTEN", $("oErr").textContent);
+    } else if (n === "NotReadableError" || n === "AbortError") {
+      fail("De input kon niet worden geopend. Waarschijnlijk gebruikt een andere app hem (bijvoorbeeld Koala Sampler). Sluit die app en probeer opnieuw. (" + n + ")");
+    } else {
+      fail(n + ": " + m);
+    }
+  }
+
+  /* ---------- meten ---------- */
+  /* VU-kern: wordt zowel in de AudioWorklet als in de tests gebruikt.
+     Gelijkgerichte gemiddelde waarde door twee gelijke 1e-orde filters (kritisch gedempt, 2e orde).
+     tau = 0,3 s / 6,6384 -> 99 % van de eindwaarde na 300 ms. Schaal pi/(2*wortel2) zodat een sinus zijn RMS-waarde toont. */
+  var VU_CORE = [
+    "function RmVuCore(sr){ var tau=0.3/6.6384; this.k=1-Math.exp(-1/(sr*tau)); this.a=0; this.b=0; }",
+    "RmVuCore.prototype.run=function(L,R,n){ var a=this.a,b=this.b,k=this.k,pk=0;",
+    "  for(var i=0;i<n;i++){ var m=R?0.5*(L[i]+R[i]):L[i]; var r=m<0?-m:m; a+=k*(r-a); b+=k*(a-b); if(r>pk) pk=r; }",
+    "  this.a=a; this.b=b; return pk; };",
+    "RmVuCore.prototype.value=function(){ return this.b*1.1107207345395915; };"
+  ].join("\n");
+  window.RM_ENGINE = { core: VU_CORE };
+
+  var WORKLET = VU_CORE + "\n" + [
+    "class RmMeter extends AudioWorkletProcessor {",
+    "  constructor(){ super(); this.s=new Float64Array(8); this.p=new Float32Array(8); this.n=0; this.t=0; this.ch=0; this.vu=new RmVuCore(sampleRate); }",
+    "  process(inputs){",
+    "    var inp=inputs[0]; if(!inp||inp.length===0) return true;",
+    "    this.ch=inp.length; var len=inp[0].length; var cc=Math.min(inp.length,8);",
+    "    for(var c=0;c<cc;c++){ var d=inp[c], ss=0, pk=0;",
+    "      for(var i=0;i<d.length;i++){ var v=d[i]; ss+=v*v; var a=v<0?-v:v; if(a>pk) pk=a; }",
+    "      this.s[c]+=ss; if(pk>this.p[c]) this.p[c]=pk; }",
+    "    this.vu.run(inp[0], inp.length>1?inp[1]:null, len);",
+    "    this.n+=len; this.t+=len;",
+    "    if(this.t>=sampleRate/20){",
+    "      var rms=[],peak=[];",
+    "      for(var k=0;k<cc;k++){ rms.push(Math.sqrt(this.s[k]/this.n)); peak.push(this.p[k]); this.s[k]=0; this.p[k]=0; }",
+    "      this.port.postMessage({ch:this.ch,n:this.n,rms:rms,peak:peak,vu:this.vu.value()}); this.n=0; this.t=0;",
+    "    }",
+    "    return true;",
+    "  }",
+    "}",
+    "registerProcessor('rm-meter', RmMeter);"
+  ].join("\n");
+
+  async function start() {
+    if (S.running || !hasMd || !hasWorklet) return;
+    var id = $("dev").value;
+    if (!id) { fail("Kies eerst een audio-input in de lijst. Er wordt nooit automatisch een andere input gekozen.", "GEEN INPUT GEKOZEN"); return; }
+    var opt = $("dev").selectedOptions[0];
+    S.chosenId = id; S.chosenLabel = opt ? opt.textContent : "";
+    $("oErr").textContent = "geen";
+    $("btnStart").disabled = true;
+    try {
+      S.ctx = new AC({ latencyHint: "interactive" });
+      await S.ctx.resume();
+      S.stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          deviceId: { exact: id },
+          channelCount: { ideal: 2 },
+          echoCancellation: false, noiseSuppression: false, autoGainControl: false
+        }
+      });
+      S.track = S.stream.getAudioTracks()[0];
+      if (!S.track) throw new Error("De browser gaf geen audiospoor terug.");
+      S.trackSettings = S.track.getSettings ? S.track.getSettings() : {};
+      S.trackLabel = S.track.label || "";
+      log("Spoor geopend: " + S.trackLabel + " | " + JSON.stringify(S.trackSettings));
+
+      if (S.trackSettings.deviceId && S.trackSettings.deviceId !== id) {
+        throw new Error("De browser gebruikt een ander apparaat (" + S.trackLabel + ") dan het gekozen apparaat. Meting afgebroken.");
+      }
+
+      var url = URL.createObjectURL(new Blob([WORKLET], { type: "application/javascript" }));
+      await S.ctx.audioWorklet.addModule(url);
+      URL.revokeObjectURL(url);
+
+      S.node = new AudioWorkletNode(S.ctx, "rm-meter", {
+        numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1],
+        channelCountMode: "max", channelInterpretation: "discrete"
+      });
+      S.node.port.onmessage = onMeter;
+      S.source = S.ctx.createMediaStreamSource(S.stream);
+      S.gain = S.ctx.createGain();
+      S.gain.gain.value = 0;               // stil: geen hoorbare feedback
+      S.source.connect(S.node);
+      S.node.connect(S.gain);
+      S.gain.connect(S.ctx.destination);
+
+      S.track.addEventListener("ended", function () {
+        if (S.running) { stop(true); fail("De audio-input is verdwenen. USB-kabel losgekoppeld of SP uitgezet?", "APPARAAT LOSGEKOPPELD"); }
+      });
+      var ctxRef = S.ctx;
+      ctxRef.onstatechange = function () { log("AudioContext: " + ctxRef.state); };
+
+      S.running = true; S.startedAt = performance.now(); S.lastMsg = 0; S.lastSignal = 0; S.everSignal = false;
+      S.ch = 0; S.pow = [0, 0]; S.peakHold = [0, 0]; S.peakAt = [0, 0]; S.vuLin = 0; S.st = newStats();
+      $("btnStop").disabled = false;
+      try { if (navigator.wakeLock) S.wake = await navigator.wakeLock.request("screen"); } catch (e) { /* optioneel */ }
+      showSettings();
+      setStatus("ok", "AUDIO-INPUT ACTIEF", "Wacht op audiogegevens…");
+    } catch (e) {
+      cleanup();
+      if (e && e.name && /Error$/.test(e.name) && e.name !== "Error") handleGumError(e); else fail(e && e.message ? e.message : String(e));
+      $("btnStart").disabled = false;
+    }
+  }
+
+  function showSettings() {
+    var st = S.trackSettings || {};
+    $("oDev").textContent = (S.trackLabel || S.chosenLabel || "–");
+    $("oConn").textContent = S.running ? "verbonden, input geopend" : "niet verbonden";
+    $("oRate").textContent = "context " + (S.ctx ? S.ctx.sampleRate : "?") + " Hz · spoor " + (st.sampleRate ? st.sampleRate + " Hz" : "onbekend");
+    var flag = function (v) { return v === false ? "uit" : (v === true ? "AAN" : "onbekend"); };
+    $("oProc").textContent = "echo " + flag(st.echoCancellation) + " · ruis " + flag(st.noiseSuppression) + " · autogain " + flag(st.autoGainControl);
+  }
+
+  function newStats() { return { blocks: 0, sig: 0, diff: 0, maxDiff: 0, vuMax: -Infinity, rmsMax: [0, 0], pkMax: [0, 0] }; }
+  function onMeter(e) {
+    var d = e.data, now = performance.now();
+    S.lastMsg = now; S.ch = d.ch; S.vuLin = d.vu || 0;
+    var dt = d.n / S.ctx.sampleRate, alpha = 1 - Math.exp(-dt / 0.3), mx = 0;
+    for (var c = 0; c < Math.min(2, d.rms.length); c++) {
+      var x2 = d.rms[c] * d.rms[c];
+      S.pow[c] += alpha * (x2 - S.pow[c]);
+      if (d.peak[c] >= S.peakHold[c] || now - S.peakAt[c] > 2000) { S.peakHold[c] = d.peak[c]; S.peakAt[c] = now; }
+    }
+    for (var k = 0; k < d.peak.length; k++) if (d.peak[k] > mx) mx = d.peak[k];
+    var st = S.st;
+    if (st) {
+      st.blocks++;
+      var vdb = db(S.vuLin) + S.gainDb - S.cal; if (vdb > st.vuMax) st.vuMax = vdb;
+      for (var q = 0; q < Math.min(2, d.rms.length); q++) {
+        if (d.rms[q] > st.rmsMax[q]) st.rmsMax[q] = d.rms[q];
+        if (d.peak[q] > st.pkMax[q]) st.pkMax[q] = d.peak[q];
+      }
+      if (d.rms.length >= 2 && db(mx) >= -50) {
+        st.sig++;
+        if (d.rms[0] > 1e-5 && d.rms[1] > 1e-5) {
+          var df = Math.abs(20 * Math.log10(d.rms[0] / d.rms[1]));
+          if (df > st.maxDiff) st.maxDiff = df;
+          if (df > 0.5) st.diff++;
+        } else if (d.rms[0] > 1e-5 || d.rms[1] > 1e-5) { st.diff++; st.maxDiff = Infinity; }
+      }
+    }
+    if (db(mx) >= SIGNAL_THRESHOLD_DB) { S.lastSignal = now; S.everSignal = true; }
+  }
+
+  function cleanup() {
+    try { if (S.source) S.source.disconnect(); } catch (e) {}
+    try { if (S.node) { S.node.port.onmessage = null; S.node.disconnect(); } } catch (e) {}
+    try { if (S.gain) S.gain.disconnect(); } catch (e) {}
+    try { if (S.stream) S.stream.getTracks().forEach(function (t) { t.stop(); }); } catch (e) {}
+    try { if (S.ctx) { S.ctx.onstatechange = null; if (S.ctx.state !== "closed") S.ctx.close(); } } catch (e) {}
+    try { if (S.wake) { S.wake.release(); S.wake = null; } } catch (e) {}
+    S.source = S.node = S.gain = S.stream = S.ctx = S.track = null;
+    S.running = false;
+  }
+
+  function stop(silent) {
+    cleanup();
+    $("btnStart").disabled = false; $("btnStop").disabled = true;
+    $("oConn").textContent = "niet verbonden";
+    if (!silent) setStatus("info", "GESTOPT", "Meting gestopt. Tik op START METEN om opnieuw te beginnen.");
+  }
+
+  /* ---------- weergave ---------- */
+  function barPct(d) { return isFinite(d) ? Math.max(0, Math.min(100, (d + 60) / 60 * 100)) : 0; }
+
+  var VU_MIN = -20, VU_MAX = 3;
+  function vuPct(v) { return Math.max(0, Math.min(100, (v - VU_MIN) / (VU_MAX - VU_MIN) * 100)); }
+  function sgn(n) { return n > 0 ? "+" + n : (n < 0 ? MINUS + Math.abs(n) : "0"); }
+  function fmtVU(v) { return isFinite(v) ? (v > 0.05 ? "+" : (v < -0.05 ? MINUS : "")) + Math.abs(v).toFixed(1) : MINUS + "∞"; }
+
+  (function buildTicks() {
+    var box = $("vuTicks");
+    [-20, -15, -10, -7, -5, -3, -2, -1, 0, 1, 2, 3].forEach(function (v) {
+      var s = document.createElement("span");
+      s.textContent = v > 0 ? "+" + v : (v < 0 ? MINUS + Math.abs(v) : "0");
+      s.style.left = vuPct(v) + "%";
+      if (v >= 0) s.className = "red";
+      box.appendChild(s);
+    });
+  })();
+
+  function renderCtl() {
+    $("calTxt").firstChild.nodeValue = sgn(S.cal) + " dBFS";
+    $("gTxt").firstChild.nodeValue = sgn(S.gainDb) + " dB";
+  }
+  function saveCtl() { try { localStorage.setItem("rmvu", JSON.stringify({ cal: S.cal, g: S.gainDb })); } catch (e) {} }
+  function clampi(v, lo, hi) { return Math.max(lo, Math.min(hi, Math.round(v))); }
+  try {
+    var sv = JSON.parse(localStorage.getItem("rmvu") || "null");
+    if (sv && isFinite(sv.cal) && isFinite(sv.g)) { S.cal = clampi(sv.cal, -24, -6); S.gainDb = clampi(sv.g, -24, 24); }
+  } catch (e) {}
+  renderCtl();
+  function bump(key, d, lo, hi) { S[key] = clampi(S[key] + d, lo, hi); renderCtl(); saveCtl(); }
+  $("calDn").addEventListener("click", function () { bump("cal", -1, -24, -6); });
+  $("calUp").addEventListener("click", function () { bump("cal", 1, -24, -6); });
+  $("gDn").addEventListener("click", function () { bump("gainDb", -1, -24, 24); });
+  $("gUp").addEventListener("click", function () { bump("gainDb", 1, -24, 24); });
+  $("btnReset").addEventListener("click", function () { S.cal = -18; S.gainDb = 0; renderCtl(); saveCtl(); });
+
+  function currentVU() { return db(S.vuLin) + S.gainDb - S.cal; }
+
+  function tick() {
+    var now = performance.now();
+    if (S.running) {
+      var vu = currentVU();
+      $("vuNum").textContent = fmtVU(vu) + " VU";
+      $("vuCover").style.width = (100 - vuPct(vu)) + "%";
+      $("vuInfo").textContent = "Detector: " + fmt(db(S.vuLin)) + " dBFS (sinus-RMS-equivalent) · " +
+        (vu < VU_MIN ? "onder " + MINUS + "20 VU, buiten de schaal" : (vu > VU_MAX ? "boven +3 VU, buiten de schaal" : "binnen de schaal"));
+      var chTxt = S.ch ? S.ch + (S.ch === 1 ? " kanaal (mono)" : " kanalen") : "wacht op data…";
+      var tc = S.trackSettings && S.trackSettings.channelCount;
+      $("oCh").textContent = chTxt + (tc ? " · spoor meldt " + tc : "");
+      for (var c = 0; c < 2; c++) {
+        var has = S.ch > c, nm = c ? "R" : "L";
+        var r = has ? db(Math.sqrt(S.pow[c])) : -Infinity;
+        var p = has ? db(S.peakHold[c]) : -Infinity;
+        $("lv" + nm).textContent = (has || c === 0 ? "" : "geen kanaal · ") + fmt(r) + " dBFS RMS · piek " + fmt(p);
+        $("b" + nm).style.width = barPct(r) + "%";
+        $("p" + nm).style.left = "calc(" + barPct(p) + "% - 3px)";
+      }
+      if (S.lastMsg === 0) {
+        if (now - S.startedAt > 2000) fail("Er komen geen audiogegevens binnen vanaf de browser (AudioContext: " + (S.ctx && S.ctx.state) + ").", "GEEN AUDIODATA");
+      } else if (now - S.lastMsg > 1500) {
+        fail("Audiogegevens zijn gestopt (AudioContext: " + (S.ctx && S.ctx.state) + "). Is Chrome op de achtergrond gezet?", "GEEN AUDIODATA");
+      } else if (now - S.lastSignal < 1000) {
+        $("oSig").textContent = "ja, signaal ontvangen"; $("oSig").className = "yes";
+        setStatus("ok", "AUDIOSIGNAAL ONTVANGEN", "Piek boven " + MINUS + "60 dBFS.");
+      } else {
+        $("oSig").textContent = S.everSignal ? "nu stil (eerder wel signaal)" : "nog geen signaal sinds start"; $("oSig").className = "no";
+        setStatus("warn", "AUDIO-INPUT ACTIEF, MAAR GEEN SIGNAAL",
+          "Piek onder " + MINUS + "60 dBFS. Speel een pad op de SP. Blijft het stil, kies dan een andere input.");
+      }
+    } else {
+      $("vuNum").textContent = "–"; $("vuCover").style.width = "100%"; $("vuInfo").textContent = "Nog niet aan het meten.";
+      $("oSig").textContent = "–"; $("oSig").className = "";
+      $("lvL").textContent = MINUS + "∞ dBFS RMS · piek " + MINUS + "∞"; $("lvR").textContent = $("lvL").textContent;
+      $("bL").style.width = "0"; $("bR").style.width = "0";
+      $("pL").style.left = "0"; $("pR").style.left = "0";
+      $("oCh").textContent = "–";
+    }
+  }
+  setInterval(tick, 100);
+
+  /* ---------- aansluiten en loskoppelen ---------- */
+  if (hasMd) {
+    navigator.mediaDevices.addEventListener("devicechange", async function () {
+      log("Audio-apparaten gewijzigd (aangesloten of losgekoppeld).");
+      try {
+        var r = await refreshDevices();
+        if (S.running && !S.devices.some(function (d) { return d.deviceId === S.chosenId; })) {
+          stop(true); fail("De gekozen input is verdwenen uit de lijst. USB-kabel losgekoppeld?", "APPARAAT LOSGEKOPPELD");
+        } else if (!S.running) {
+          if (r.count === 0) setStatus("warn", "GEEN APPARAAT AANGESLOTEN", "Geen audio-input gevonden.");
+          else if (r.spId) setStatus("info", "USB-APPARAAT GEDETECTEERD", "SP-404MKII is verbonden. Tik op START METEN.");
+        }
+      } catch (e) { log("Verversen mislukt: " + e.message); }
+    });
+  }
+  document.addEventListener("visibilitychange", function () {
+    if (!document.hidden && S.ctx && S.ctx.state === "suspended") S.ctx.resume().catch(function () {});
+    if (!document.hidden && S.running && !S.wake && navigator.wakeLock) navigator.wakeLock.request("screen").then(function (w) { S.wake = w; }).catch(function () {});
+  });
+
+  /* ---------- rapport ---------- */
+  function buildReport() {
+    var L = [];
+    L.push("RM VU METER – testrapport (fase 2)");
+    L.push("Tijd: " + new Date().toISOString());
+    L.push("Adres: " + location.protocol + "//" + location.host + " | beveiligde context: " + window.isSecureContext);
+    L.push("mediaDevices: " + hasMd + " | AudioWorklet: " + hasWorklet);
+    L.push("Browser: " + navigator.userAgent);
+    L.push("Toestemming microfoon: " + S.permission);
+    L.push("Gevonden inputs: " + (S.devices.length ? S.devices.map(function (d) { return "[" + (d.label || "naamloos") + "]"; }).join(" ") : "geen"));
+    L.push("Gekozen input: " + (S.chosenLabel || "geen"));
+    L.push("Spoor-label: " + (S.trackLabel || "–"));
+    L.push("Spoor-instellingen: " + JSON.stringify(S.trackSettings || {}));
+    L.push("Sample rate context: " + (S.ctx ? S.ctx.sampleRate : "–"));
+    L.push("Kanalen gemeten: " + S.ch);
+    L.push("Status nu: " + S.statusText + " (" + S.statusKind + ")");
+    L.push("Ooit signaal ontvangen: " + S.everSignal);
+    L.push("Niveau L/R RMS dBFS: " + fmt(db(Math.sqrt(S.pow[0]))) + " / " + fmt(db(Math.sqrt(S.pow[1]))));
+    L.push("Piek L/R dBFS: " + fmt(db(S.peakHold[0])) + " / " + fmt(db(S.peakHold[1])));
+    if (S.st) {
+      var t = S.st;
+      L.push("--- sinds start van de meting ---");
+      L.push("Hoogste VU: " + (isFinite(t.vuMax) ? fmtVU(t.vuMax) : "–") + " | blokken van 50 ms: " + t.blocks + " | met signaal: " + t.sig);
+      L.push("Hoogste RMS-blok L/R: " + fmt(db(t.rmsMax[0])) + " / " + fmt(db(t.rmsMax[1])) + " dBFS | hoogste piek L/R: " + fmt(db(t.pkMax[0])) + " / " + fmt(db(t.pkMax[1])) + " dBFS");
+      L.push("Blokken met verschil L/R > 0,5 dB: " + t.diff + " van " + t.sig + (t.sig ? " (" + (100 * t.diff / t.sig).toFixed(1) + " %)" : "") +
+        " | grootste verschil: " + (t.maxDiff === Infinity ? "één kanaal stil, ander kanaal niet" : t.maxDiff.toFixed(1) + " dB"));
+      L.push("Betekenis: 0 % verschil = beide kanalen altijd gelijk (mono of exact dubbel). Hoger % = er komt echt stereo binnen.");
+    }
+    L.push("Kalibratie: 0 VU = " + S.cal + " dBFS | meter-gain: " + S.gainDb + " dB");
+    L.push("VU nu: " + (S.running ? fmtVU(currentVU()) : "–") + " | detector: " + fmt(db(S.vuLin)) + " dBFS");
+    L.push("Laatste fout: " + $("oErr").textContent);
+    L.push("--- logboek ---");
+    return L.join("\n") + "\n" + logLines.join("\n");
+  }
+
+  $("btnCopy").addEventListener("click", function () {
+    var ta = $("report");
+    ta.value = buildReport(); ta.hidden = false;
+    var done = function (ok) { log(ok ? "Testrapport gekopieerd." : "Kopiëren niet gelukt: selecteer de tekst hieronder en kopieer handmatig."); };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(ta.value).then(function () { done(true); }, function () { ta.focus(); ta.select(); done(false); });
+    } else { ta.focus(); ta.select(); done(false); }
+  });
+
+  $("btnFind").addEventListener("click", findDevices);
+  $("btnStart").addEventListener("click", start);
+  $("btnStop").addEventListener("click", function () { stop(false); });
+})();
+</script>
+</body>
+</html>
